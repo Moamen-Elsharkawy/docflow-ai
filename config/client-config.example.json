@@ -1,0 +1,67 @@
+{
+  "$schema": "./client-config.schema.json",
+  "client_id": "example-client",
+  "display_name": "Example Client Co.",
+  "default_currency": "USD",
+  "default_language": "en",
+
+  "intake": {
+    "gmail": {
+      "enabled": true,
+      "watch_address": "client-docs@example.com",
+      "label_filter": "docflow/example-client"
+    },
+    "drive": {
+      "enabled": true,
+      "folder_id": "REPLACE_WITH_DRIVE_FOLDER_ID"
+    }
+  },
+
+  "doc_types_enabled": ["invoice", "contract", "form"],
+
+  "destinations": {
+    "invoices": {
+      "kind": "sheets",
+      "spreadsheet_id": "REPLACE_WITH_SHEETS_ID",
+      "tab": "invoices",
+      "review_tab": "review_queue"
+    },
+    "contracts": {
+      "kind": "notion",
+      "database_id": "REPLACE_WITH_NOTION_DB_ID"
+    }
+  },
+
+  "forms": {
+    "destination": {
+      "kind": "sheets",
+      "spreadsheet_id": "REPLACE_WITH_SHEETS_ID",
+      "tab": "forms"
+    },
+    "fields": [
+      { "name": "applicant_name", "type": "string", "required": true, "description": "Full name of the applicant" },
+      { "name": "applicant_email", "type": "string", "required": true, "description": "Email address" },
+      { "name": "applicant_phone", "type": "string", "required": false, "description": "Phone number with country code" },
+      { "name": "submitted_date", "type": "date", "required": false, "description": "Date the form was filled out" },
+      { "name": "consent_given", "type": "boolean", "required": false, "description": "Whether the consent checkbox is ticked" }
+    ]
+  },
+
+  "telegram": {
+    "chat_id": "REPLACE_WITH_TELEGRAM_CHAT_ID",
+    "thread_id": null
+  },
+
+  "thresholds": {
+    "min_text_length": 50,
+    "classify_min_confidence": 0.7,
+    "extract_min_confidence": 0.8,
+    "field_min_confidence": 0.7
+  },
+
+  "audit_log": {
+    "enabled": false,
+    "supabase_url": null,
+    "supabase_table": "audit_log"
+  }
+}

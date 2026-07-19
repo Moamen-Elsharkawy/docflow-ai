@@ -1,0 +1,10 @@
+{
+  "party_a": "Company A",
+  "party_b": "Company B",
+  "contract_type": "Service Agreement",
+  "start_date": "2026-12-01",
+  "end_date": "2026-06-01",
+  "auto_renew": null,
+  "key_obligations": ["Provide service X"],
+  "confidence": 0.9
+}

@@ -1,0 +1,105 @@
+{
+  "name": "DocFlow 07 - Review Notifier",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-07",
+      "name": "When Called by Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"doc_id\": $json.doc_id,\n  \"received_at\": $json.received_at,\n  \"source\": $json.source,\n  \"filename\": $json.source_meta?.filename ?? \"\",\n  \"client_id\": $json.client_id,\n  \"classified_type\": $json.type ?? \"unknown\",\n  \"type_confidence\": $json.type_confidence ?? 0,\n  \"extraction_confidence\": $json.extraction_confidence ?? 0,\n  \"review_reason\": $json.review_reason ?? \"unspecified\",\n  \"validation_errors_json\": JSON.stringify($json.validation?.errors ?? []),\n  \"drive_link\": $json.source_meta?.drive_file_link ?? \"\",\n  \"telegram_message_id\": \"\"\n}",
+        "options": {}
+      },
+      "id": "build-row-07",
+      "name": "Build Review Row",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('When Called by Workflow').item.json.client_config.destinations.invoices.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('When Called by Workflow').item.json.client_config.destinations.invoices.review_tab || 'review_queue' }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": []
+        },
+        "options": {}
+      },
+      "id": "sheets-append-07",
+      "name": "Append to Review Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [680, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_SHEETS_CRED_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"text\": `Document needs review\\nFile: ${$('When Called by Workflow').item.json.source_meta?.filename ?? '(unknown)'}\\nSource: ${$('When Called by Workflow').item.json.source}\\nType: ${$('When Called by Workflow').item.json.type ?? 'unknown'} (${$('When Called by Workflow').item.json.type_confidence ?? 0})\\nReason: ${$('When Called by Workflow').item.json.review_reason ?? 'unspecified'}\\nDetails: ${($('When Called by Workflow').item.json.validation?.errors ?? []).join(', ')}\\n${$('When Called by Workflow').item.json.source_meta?.drive_file_link ?? ''}`\n}",
+        "options": {}
+      },
+      "id": "build-tg-07",
+      "name": "Build Telegram Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('When Called by Workflow').item.json.client_config.telegram.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "id": "telegram-07",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1120, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When Called by Workflow": {
+      "main": [[{ "node": "Build Review Row", "type": "main", "index": 0 }]]
+    },
+    "Build Review Row": {
+      "main": [[{ "node": "Append to Review Sheet", "type": "main", "index": 0 }]]
+    },
+    "Append to Review Sheet": {
+      "main": [[{ "node": "Build Telegram Message", "type": "main", "index": 0 }]]
+    },
+    "Build Telegram Message": {
+      "main": [[{ "node": "Send Telegram Alert", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "docflow" }],
+  "pinData": {}
+}

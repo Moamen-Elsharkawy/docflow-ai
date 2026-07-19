@@ -1,0 +1,218 @@
+{
+  "name": "DocFlow 05 - Contract Extractor",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-05",
+      "name": "When Called by Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "HTTP-Referer", "value": "https://docflow.local" },
+            { "name": "X-Title", "value": "DocFlow AI" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"openai/gpt-4o-mini\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"You are a contract analyst. Extract key facts from the contract text into valid JSON. Do not invent; use null for missing fields. Output JSON only. Schema: {party_a (req), party_b (req), contract_type (req), start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), auto_renew (bool), key_obligations (array of <=8 short strings), payment_terms, termination_clause_summary (<=300 chars), governing_law, signed (bool), confidence (0..1, req)}. Normalize dates to YYYY-MM-DD. Keep names in source language.\"},\n    {\"role\": \"user\", \"content\": $json.raw_text}\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.1,\n  \"max_tokens\": 1200\n}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "timeout": 60000,
+          "retry": { "tries": 3, "waitBetweenTries": 2000 }
+        }
+      },
+      "id": "llm-05",
+      "name": "Call OpenRouter (Extract)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_OPENROUTER_CRED_ID",
+          "name": "OpenRouter API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $('When Called by Workflow').first().json;\nconst raw = $input.first().json;\nconst content = raw?.choices?.[0]?.message?.content ?? '{}';\nlet extracted;\ntry { extracted = JSON.parse(content); }\ncatch (e) { extracted = { confidence: 0, _parse_error: true }; }\nreturn [{ json: { ...env, extracted, extraction_confidence: extracted.confidence ?? 0 } }];"
+      },
+      "id": "parse-05",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nconst e = env.extracted || {};\nconst errors = [];\n\nfor (const f of ['party_a','party_b','contract_type','confidence']) if (e[f] == null || e[f] === '') errors.push('required:' + f);\nfor (const f of ['start_date','end_date']) if (e[f] && !/^\\d{4}-\\d{2}-\\d{2}$/.test(e[f])) errors.push('date:' + f + ':not_iso');\nif (e.start_date && e.end_date && e.start_date > e.end_date) errors.push('date:start_after_end');\nif (Array.isArray(e.key_obligations) && e.key_obligations.length > 8) errors.push('key_obligations:too_many');\n\nconst conf = e.confidence ?? 0;\nconst minConf = env.client_config?.thresholds?.extract_min_confidence ?? 0.8;\nif (conf < minConf) errors.push('confidence:overall:' + conf);\n\nenv.extraction_confidence = conf;\nenv.validation = { ok: errors.length === 0, errors };\nreturn [{ json: env }];"
+      },
+      "id": "validate-05",
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "validation-gate-05",
+              "leftValue": "={{ $json.validation.ok }}",
+              "rightValue": "",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "gate-05",
+      "name": "Validation Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": {
+          "__rl": true,
+          "value": "={{ $json.client_config.destinations.contracts.database_id }}",
+          "mode": "id"
+        },
+        "title": "={{ $json.extracted.party_a }} <-> {{ $json.extracted.party_b }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "Party A", "type": "rich_text", "textContent": "={{ $json.extracted.party_a }}" },
+            { "key": "Party B", "type": "rich_text", "textContent": "={{ $json.extracted.party_b }}" },
+            { "key": "Contract Type", "type": "select", "selectValue": "={{ $json.extracted.contract_type }}" },
+            { "key": "Start Date", "type": "date", "date": "={{ $json.extracted.start_date }}" },
+            { "key": "End Date", "type": "date", "date": "={{ $json.extracted.end_date }}" },
+            { "key": "Signed", "type": "checkbox", "checkboxValue": "={{ $json.extracted.signed === true }}" },
+            { "key": "Confidence", "type": "number", "numberValue": "={{ $json.extraction_confidence }}" },
+            { "key": "Source", "type": "url", "urlValue": "={{ $json.source_meta?.drive_file_link ?? '' }}" }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "type": "heading_2",
+              "richText": false,
+              "textContent": "Key Obligations"
+            },
+            {
+              "type": "paragraph",
+              "richText": false,
+              "textContent": "={{ ($json.extracted.key_obligations ?? []).map(o => '- ' + o).join('\\n') }}"
+            },
+            {
+              "type": "heading_2",
+              "richText": false,
+              "textContent": "Termination"
+            },
+            {
+              "type": "paragraph",
+              "richText": false,
+              "textContent": "={{ $json.extracted.termination_clause_summary ?? '(none)' }}"
+            }
+          ]
+        }
+      },
+      "id": "notion-05",
+      "name": "Create Notion Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [1340, 200],
+      "credentials": {
+        "notionApi": {
+          "id": "REPLACE_WITH_NOTION_CRED_ID",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Validate').item.json.client_config.telegram.chat_id }}",
+        "text": "=Contract processed\nParties: {{ $('Validate').item.json.extracted.party_a }} <-> {{ $('Validate').item.json.extracted.party_b }}\nType: {{ $('Validate').item.json.extracted.contract_type }}\nConfidence: {{ $('Validate').item.json.extraction_confidence }}",
+        "additionalFields": {}
+      },
+      "id": "telegram-05",
+      "name": "Telegram Success",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1560, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nenv.review_reason = env.validation?.ok ? 'extract_low_conf' : 'validation_failed';\nreturn [{ json: env }];"
+      },
+      "id": "tag-review-05",
+      "name": "Tag Review Reason",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_07_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-07-from-05",
+      "name": "Route to Review",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1560, 400]
+    }
+  ],
+  "connections": {
+    "When Called by Workflow": {
+      "main": [[{ "node": "Call OpenRouter (Extract)", "type": "main", "index": 0 }]]
+    },
+    "Call OpenRouter (Extract)": {
+      "main": [[{ "node": "Parse JSON", "type": "main", "index": 0 }]]
+    },
+    "Parse JSON": {
+      "main": [[{ "node": "Validate", "type": "main", "index": 0 }]]
+    },
+    "Validate": {
+      "main": [[{ "node": "Validation Gate", "type": "main", "index": 0 }]]
+    },
+    "Validation Gate": {
+      "main": [
+        [{ "node": "Create Notion Page", "type": "main", "index": 0 }],
+        [{ "node": "Tag Review Reason", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Notion Page": {
+      "main": [[{ "node": "Telegram Success", "type": "main", "index": 0 }]]
+    },
+    "Tag Review Reason": {
+      "main": [[{ "node": "Route to Review", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "docflow" }],
+  "pinData": {}
+}

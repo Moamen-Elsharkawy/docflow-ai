@@ -1,0 +1,13 @@
+# Per-client config holds real IDs and destinations. Only the example is tracked.
+config/client-config.*.json
+!config/client-config.example.json
+!config/client-config.schema.json
+
+# Secrets / env
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+node_modules/

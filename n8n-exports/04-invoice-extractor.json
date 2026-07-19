@@ -1,0 +1,207 @@
+{
+  "name": "DocFlow 04 - Invoice Extractor",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-04",
+      "name": "When Called by Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "HTTP-Referer", "value": "https://docflow.local" },
+            { "name": "X-Title", "value": "DocFlow AI" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"openai/gpt-4o-mini\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"You are a data extraction specialist. Extract structured invoice data from the document text into valid JSON. Do not invent values; use null for missing fields. Output JSON only, no prose. Schema: {vendor_name (req), vendor_tax_id, invoice_number (req), invoice_date (YYYY-MM-DD, req), due_date (YYYY-MM-DD), currency (3-letter ISO, req), subtotal, tax_amount, tax_rate, total_amount (number, req), line_items: [{description, qty, unit_price, total}], payment_terms, notes, confidence (0..1, req)}. Normalize all dates to YYYY-MM-DD. Strip thousands separators from numbers. Keep extracted text in source language.\"},\n    {\"role\": \"user\", \"content\": $json.raw_text}\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.1,\n  \"max_tokens\": 1500\n}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "timeout": 60000,
+          "retry": { "tries": 3, "waitBetweenTries": 2000 }
+        }
+      },
+      "id": "llm-04",
+      "name": "Call OpenRouter (Extract)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_OPENROUTER_CRED_ID",
+          "name": "OpenRouter API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $('When Called by Workflow').first().json;\nconst raw = $input.first().json;\nconst content = raw?.choices?.[0]?.message?.content ?? '{}';\nlet extracted;\ntry { extracted = JSON.parse(content); }\ncatch (e) { extracted = { confidence: 0, _parse_error: true }; }\nreturn [{ json: { ...env, extracted, extraction_confidence: extracted.confidence ?? 0 } }];"
+      },
+      "id": "parse-04",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nconst e = env.extracted || {};\nconst errors = [];\n\nconst required = ['vendor_name','invoice_number','invoice_date','currency','total_amount','confidence'];\nfor (const f of required) if (e[f] == null || e[f] === '') errors.push('required:' + f);\n\nfor (const f of ['invoice_date','due_date']) if (e[f] && !/^\\d{4}-\\d{2}-\\d{2}$/.test(e[f])) errors.push('date:' + f + ':not_iso');\n\nif (e.total_amount != null && typeof e.total_amount !== 'number') errors.push('type:total_amount:expected_number');\nif (e.currency && !/^[A-Z]{3}$/.test(e.currency)) errors.push('currency:not_iso_3');\n\nconst conf = e.confidence ?? 0;\nconst minConf = env.client_config?.thresholds?.extract_min_confidence ?? 0.8;\nif (conf < minConf) errors.push('confidence:overall:' + conf);\n\nif (Array.isArray(e.line_items) && e.subtotal) {\n  const sum = e.line_items.reduce((a, li) => a + (Number(li.total) || 0), 0);\n  if (sum > 0 && Math.abs(sum - e.subtotal) / e.subtotal > 0.05) errors.push('math:line_items_vs_subtotal_diff>5%');\n}\n\nenv.extraction_confidence = conf;\nenv.validation = { ok: errors.length === 0, errors };\nreturn [{ json: env }];"
+      },
+      "id": "validate-04",
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "validation-gate",
+              "leftValue": "={{ $json.validation.ok }}",
+              "rightValue": "",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "gate-04",
+      "name": "Validation Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.client_config.destinations.invoices.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.client_config.destinations.invoices.tab || 'invoices' }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "doc_id": "={{ $json.doc_id }}",
+            "received_at": "={{ $json.received_at }}",
+            "source": "={{ $json.source }}",
+            "filename": "={{ $json.source_meta?.filename ?? '' }}",
+            "vendor_name": "={{ $json.extracted.vendor_name }}",
+            "invoice_number": "={{ $json.extracted.invoice_number }}",
+            "invoice_date": "={{ $json.extracted.invoice_date }}",
+            "due_date": "={{ $json.extracted.due_date ?? '' }}",
+            "currency": "={{ $json.extracted.currency }}",
+            "subtotal": "={{ $json.extracted.subtotal ?? '' }}",
+            "tax_amount": "={{ $json.extracted.tax_amount ?? '' }}",
+            "total_amount": "={{ $json.extracted.total_amount }}",
+            "line_items_json": "={{ JSON.stringify($json.extracted.line_items ?? []) }}",
+            "payment_terms": "={{ $json.extracted.payment_terms ?? '' }}",
+            "extraction_confidence": "={{ $json.extraction_confidence }}",
+            "drive_link": "={{ $json.source_meta?.drive_file_link ?? '' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-04",
+      "name": "Append Invoice Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1340, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_SHEETS_CRED_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Validate').item.json.client_config.telegram.chat_id }}",
+        "text": "=Invoice processed\nVendor: {{ $('Validate').item.json.extracted.vendor_name }}\nNumber: {{ $('Validate').item.json.extracted.invoice_number }}\nTotal: {{ $('Validate').item.json.extracted.currency }} {{ $('Validate').item.json.extracted.total_amount }}\nConfidence: {{ $('Validate').item.json.extraction_confidence }}",
+        "additionalFields": {}
+      },
+      "id": "telegram-04",
+      "name": "Telegram Success",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1560, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nenv.review_reason = env.validation?.ok ? 'extract_low_conf' : 'validation_failed';\nreturn [{ json: env }];"
+      },
+      "id": "tag-review-04",
+      "name": "Tag Review Reason",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_07_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-07-from-04",
+      "name": "Route to Review",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1560, 400]
+    }
+  ],
+  "connections": {
+    "When Called by Workflow": {
+      "main": [[{ "node": "Call OpenRouter (Extract)", "type": "main", "index": 0 }]]
+    },
+    "Call OpenRouter (Extract)": {
+      "main": [[{ "node": "Parse JSON", "type": "main", "index": 0 }]]
+    },
+    "Parse JSON": {
+      "main": [[{ "node": "Validate", "type": "main", "index": 0 }]]
+    },
+    "Validate": {
+      "main": [[{ "node": "Validation Gate", "type": "main", "index": 0 }]]
+    },
+    "Validation Gate": {
+      "main": [
+        [{ "node": "Append Invoice Row", "type": "main", "index": 0 }],
+        [{ "node": "Tag Review Reason", "type": "main", "index": 0 }]
+      ]
+    },
+    "Append Invoice Row": {
+      "main": [[{ "node": "Telegram Success", "type": "main", "index": 0 }]]
+    },
+    "Tag Review Reason": {
+      "main": [[{ "node": "Route to Review", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "docflow" }],
+  "pinData": {}
+}

@@ -1,0 +1,184 @@
+{
+  "name": "DocFlow 02 - Drive Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DRIVE_FOLDER_ID",
+          "mode": "id"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "trigger-02",
+      "name": "Drive Trigger",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_WITH_DRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "leftValue": "" },
+          "conditions": [
+            {
+              "id": "mime-pdf",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "application/pdf",
+              "operator": { "type": "string", "operation": "equals" }
+            },
+            {
+              "id": "mime-docx",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "filter-02",
+      "name": "Supported MIME?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": { "__rl": true, "value": "={{ $json.id }}", "mode": "id" },
+        "options": {}
+      },
+      "id": "download-02",
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [680, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_WITH_DRIVE_CRED_ID",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "extractFromFile",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "extract-02",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst driveMeta = $('Drive Trigger').first().json;\nconst raw_text = item.json.text || item.json.data || '';\n\nconst clientConfig = {\n  client_id: 'moamen',\n  thresholds: { min_text_length: 50, classify_min_confidence: 0.7, extract_min_confidence: 0.8 },\n  destinations: { invoices: { spreadsheet_id: '1JxBDiQbPqP4_9VYIatAhNldQX30Hpz_rwjr7BfK9Odo', tab: 'invoices', review_tab: 'review_queue' }, contracts: { database_id: '096266c29be944d5958fc59e08c99605' } },\n  forms: { destination: { kind: 'sheets', spreadsheet_id: '1JxBDiQbPqP4_9VYIatAhNldQX30Hpz_rwjr7BfK9Odo', tab: 'forms' }, fields: [] },\n  telegram: { chat_id: 'REPLACE_WITH_TELEGRAM_CHAT_ID' }\n};\n\nconst envelope = {\n  doc_id: crypto.randomUUID(),\n  received_at: new Date().toISOString(),\n  source: 'drive',\n  source_meta: {\n    drive_file_id: driveMeta.id,\n    drive_file_link: driveMeta.webViewLink || ('https://drive.google.com/file/d/' + driveMeta.id + '/view'),\n    filename: driveMeta.name || ''\n  },\n  client_id: clientConfig.client_id,\n  client_config: clientConfig,\n  raw_text\n};\nreturn [{ json: envelope }];"
+      },
+      "id": "build-env-02",
+      "name": "Build Envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "leftValue": "" },
+          "conditions": [
+            {
+              "id": "text-len-gate-02",
+              "leftValue": "={{ ($json.raw_text || '').length }}",
+              "rightValue": "={{ $json.client_config?.thresholds?.min_text_length ?? 50 }}",
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "len-gate-02",
+      "name": "Text Length Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_03_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-03-from-02",
+      "name": "Call Classifier",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nenv.review_reason = 'low_text';\nreturn [{ json: env }];"
+      },
+      "id": "tag-low-text-02",
+      "name": "Tag Low Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_07_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-07-from-02",
+      "name": "Route to Review",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1780, 400]
+    }
+  ],
+  "connections": {
+    "Drive Trigger": {
+      "main": [[{ "node": "Supported MIME?", "type": "main", "index": 0 }]]
+    },
+    "Supported MIME?": {
+      "main": [
+        [{ "node": "Download File", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Download File": {
+      "main": [[{ "node": "Extract Text", "type": "main", "index": 0 }]]
+    },
+    "Extract Text": {
+      "main": [[{ "node": "Build Envelope", "type": "main", "index": 0 }]]
+    },
+    "Build Envelope": {
+      "main": [[{ "node": "Text Length Gate", "type": "main", "index": 0 }]]
+    },
+    "Text Length Gate": {
+      "main": [
+        [{ "node": "Call Classifier", "type": "main", "index": 0 }],
+        [{ "node": "Tag Low Text", "type": "main", "index": 0 }]
+      ]
+    },
+    "Tag Low Text": {
+      "main": [[{ "node": "Route to Review", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "docflow" }],
+  "pinData": {}
+}

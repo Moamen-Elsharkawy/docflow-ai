@@ -1,0 +1,14 @@
+{
+  "vendor_name": "Math Mismatch Co.",
+  "invoice_number": "MM-001",
+  "invoice_date": "2026-04-01",
+  "currency": "EUR",
+  "subtotal": 1000,
+  "tax_amount": 200,
+  "total_amount": 1200,
+  "line_items": [
+    { "description": "Item A", "qty": 1, "unit_price": 100, "total": 100 },
+    { "description": "Item B", "qty": 1, "unit_price": 200, "total": 200 }
+  ],
+  "confidence": 0.88
+}

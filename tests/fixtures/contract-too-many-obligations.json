@@ -1,0 +1,9 @@
+{
+  "party_a": "Big Corp",
+  "party_b": "Small Vendor",
+  "contract_type": "Vendor Agreement",
+  "start_date": "2026-01-01",
+  "end_date": "2027-01-01",
+  "key_obligations": ["O1","O2","O3","O4","O5","O6","O7","O8","O9"],
+  "confidence": 0.9
+}

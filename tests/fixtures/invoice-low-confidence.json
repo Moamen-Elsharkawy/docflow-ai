@@ -1,0 +1,9 @@
+{
+  "vendor_name": "Foggy Vendor",
+  "invoice_number": "FV-?-12",
+  "invoice_date": "2026-03-01",
+  "currency": "USD",
+  "total_amount": 230.5,
+  "line_items": [],
+  "confidence": 0.62
+}

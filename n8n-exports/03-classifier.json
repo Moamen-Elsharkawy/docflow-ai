@@ -1,0 +1,215 @@
+{
+  "name": "DocFlow 03 - Classifier",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-03",
+      "name": "When Called by Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "HTTP-Referer", "value": "https://docflow.local" },
+            { "name": "X-Title", "value": "DocFlow AI" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"openai/gpt-4o-mini\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"You are a document classifier. Classify the document text as exactly one of: invoice (bills, receipts, POs, credit notes), contract (service agreements, NDAs, leases, vendor agreements), form (application/intake/registration forms), or unknown. Respond with JSON only: {type, confidence (0..1), reasoning (one sentence)}. If a document has total + vendor + invoice number it's an invoice even with contract-like language. If it defines obligations between named parties without itemized totals it's a contract. If it has labeled fields meant to be filled in, it's a form.\"},\n    {\"role\": \"user\", \"content\": $json.raw_text}\n  ],\n  \"response_format\": {\"type\": \"json_object\"},\n  \"temperature\": 0.1,\n  \"max_tokens\": 200\n}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "timeout": 30000,
+          "retry": { "tries": 3, "waitBetweenTries": 2000 }
+        }
+      },
+      "id": "llm-03",
+      "name": "Call OpenRouter (Classify)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_OPENROUTER_CRED_ID",
+          "name": "OpenRouter API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $('When Called by Workflow').first().json;\nconst raw = $input.first().json;\nconst content = raw?.choices?.[0]?.message?.content ?? '{}';\nlet parsed;\ntry { parsed = JSON.parse(content); }\ncatch (e) { parsed = { type: 'unknown', confidence: 0.0, reasoning: 'json_parse_error' }; }\nreturn [{ json: { ...env, type: parsed.type, type_confidence: parsed.confidence, type_reasoning: parsed.reasoning } }];"
+      },
+      "id": "parse-03",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "conf-gate-03",
+              "leftValue": "={{ $json.type_confidence }}",
+              "rightValue": "={{ $json.client_config?.thresholds?.classify_min_confidence ?? 0.7 }}",
+              "operator": { "type": "number", "operation": "gte" }
+            },
+            {
+              "id": "type-not-unknown",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "unknown",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "gate-03",
+      "name": "Confidence Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "invoice",
+              "conditions": {
+                "options": { "caseSensitive": true, "typeValidation": "strict", "leftValue": "" },
+                "conditions": [
+                  { "id": "is-invoice", "leftValue": "={{ $json.type }}", "rightValue": "invoice", "operator": { "type": "string", "operation": "equals" } }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "contract",
+              "conditions": {
+                "options": { "caseSensitive": true, "typeValidation": "strict", "leftValue": "" },
+                "conditions": [
+                  { "id": "is-contract", "leftValue": "={{ $json.type }}", "rightValue": "contract", "operator": { "type": "string", "operation": "equals" } }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "form",
+              "conditions": {
+                "options": { "caseSensitive": true, "typeValidation": "strict", "leftValue": "" },
+                "conditions": [
+                  { "id": "is-form", "leftValue": "={{ $json.type }}", "rightValue": "form", "operator": { "type": "string", "operation": "equals" } }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "type-switch-03",
+      "name": "Type Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_04_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-04",
+      "name": "Call Invoice Extractor",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1340, 100]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_05_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-05",
+      "name": "Call Contract Extractor",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1340, 220]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_06_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-06",
+      "name": "Call Form Extractor",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1340, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nenv.review_reason = (env.type === 'unknown') ? 'classify_unknown' : 'classify_low_conf';\nreturn [{ json: env }];"
+      },
+      "id": "tag-review-03",
+      "name": "Tag Review Reason",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 460]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_07_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-07-from-03",
+      "name": "Route to Review",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1340, 460]
+    }
+  ],
+  "connections": {
+    "When Called by Workflow": {
+      "main": [[{ "node": "Call OpenRouter (Classify)", "type": "main", "index": 0 }]]
+    },
+    "Call OpenRouter (Classify)": {
+      "main": [[{ "node": "Parse Classification", "type": "main", "index": 0 }]]
+    },
+    "Parse Classification": {
+      "main": [[{ "node": "Confidence Gate", "type": "main", "index": 0 }]]
+    },
+    "Confidence Gate": {
+      "main": [
+        [{ "node": "Type Switch", "type": "main", "index": 0 }],
+        [{ "node": "Tag Review Reason", "type": "main", "index": 0 }]
+      ]
+    },
+    "Type Switch": {
+      "main": [
+        [{ "node": "Call Invoice Extractor", "type": "main", "index": 0 }],
+        [{ "node": "Call Contract Extractor", "type": "main", "index": 0 }],
+        [{ "node": "Call Form Extractor", "type": "main", "index": 0 }]
+      ]
+    },
+    "Tag Review Reason": {
+      "main": [[{ "node": "Route to Review", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "docflow" }],
+  "pinData": {}
+}

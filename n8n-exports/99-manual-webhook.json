@@ -1,0 +1,116 @@
+{
+  "name": "DocFlow 99 - Manual Webhook (Test)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "docflow-test",
+        "options": { "responseMode": "lastNode" }
+      },
+      "id": "webhook-99",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "docflow-test"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\n\nconst raw_text = body.raw_text || '';\nconst client_id = body.client_id || 'test-client';\nconst filename = body.filename || 'manual-test.txt';\n\nif (!raw_text) {\n  throw new Error('raw_text is required');\n}\n\n// Inline default test config - replace with your real values when testing.\nconst clientConfig = {\n  client_id,\n  thresholds: { min_text_length: 50, classify_min_confidence: 0.7, extract_min_confidence: 0.8 },\n  destinations: {\n    invoices: { spreadsheet_id: '1JxBDiQbPqP4_9VYIatAhNldQX30Hpz_rwjr7BfK9Odo', tab: 'invoices', review_tab: 'review_queue' },\n    contracts: { database_id: '096266c29be944d5958fc59e08c99605' }\n  },\n  forms: { destination: { kind: 'sheets', spreadsheet_id: '1JxBDiQbPqP4_9VYIatAhNldQX30Hpz_rwjr7BfK9Odo', tab: 'forms' }, fields: [] },\n  telegram: { chat_id: 'REPLACE_WITH_TELEGRAM_CHAT_ID' }\n};\n\nconst envelope = {\n  doc_id: crypto.randomUUID(),\n  received_at: new Date().toISOString(),\n  source: 'manual',\n  source_meta: {\n    email_id: null,\n    email_from: null,\n    drive_file_id: null,\n    drive_file_link: null,\n    filename\n  },\n  client_id,\n  client_config: clientConfig,\n  raw_text\n};\n\nreturn [{ json: envelope }];"
+      },
+      "id": "build-env-99",
+      "name": "Build Envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "leftValue": "" },
+          "conditions": [
+            {
+              "id": "text-len-gate",
+              "leftValue": "={{ ($json.raw_text || '').length }}",
+              "rightValue": "={{ $json.client_config?.thresholds?.min_text_length ?? 50 }}",
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "len-gate-99",
+      "name": "Text Length Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_03_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-03-99",
+      "name": "Call Classifier",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const env = $input.first().json;\nenv.review_reason = 'low_text';\nenv.review_details = 'Raw text length below threshold (' + (env.raw_text || '').length + ' chars).';\nreturn [{ json: env }];"
+      },
+      "id": "tag-low-text-99",
+      "name": "Tag Low Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "REPLACE_WITH_WORKFLOW_07_ID", "mode": "id" },
+        "options": {}
+      },
+      "id": "call-07-99",
+      "name": "Route to Review",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1120, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return a structured response to the webhook caller so they can see what happened.\nconst result = $input.first().json;\nreturn [{\n  json: {\n    status: 'ok',\n    doc_id: result.doc_id,\n    type: result.type ?? null,\n    type_confidence: result.type_confidence ?? null,\n    extraction_confidence: result.extraction_confidence ?? null,\n    validation: result.validation ?? null,\n    destination: result.destination ?? null,\n    review_reason: result.review_reason ?? null\n  }\n}];"
+      },
+      "id": "respond-99",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Build Envelope", "type": "main", "index": 0 }]]
+    },
+    "Build Envelope": {
+      "main": [[{ "node": "Text Length Gate", "type": "main", "index": 0 }]]
+    },
+    "Text Length Gate": {
+      "main": [
+        [{ "node": "Call Classifier", "type": "main", "index": 0 }],
+        [{ "node": "Tag Low Text", "type": "main", "index": 0 }]
+      ]
+    },
+    "Tag Low Text": {
+      "main": [[{ "node": "Route to Review", "type": "main", "index": 0 }]]
+    },
+    "Call Classifier": {
+      "main": [[{ "node": "Return Result", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "docflow" }, { "name": "test" }],
+  "pinData": {}
+}

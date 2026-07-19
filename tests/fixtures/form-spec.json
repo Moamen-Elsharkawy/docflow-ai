@@ -1,0 +1,7 @@
+[
+  { "name": "applicant_name", "type": "string", "required": true, "description": "Full name" },
+  { "name": "applicant_email", "type": "string", "required": true, "description": "Email" },
+  { "name": "applicant_age", "type": "number", "required": false, "description": "Age in years" },
+  { "name": "submitted_date", "type": "date", "required": false, "description": "Date submitted" },
+  { "name": "consent_given", "type": "boolean", "required": false, "description": "Consent checkbox" }
+]

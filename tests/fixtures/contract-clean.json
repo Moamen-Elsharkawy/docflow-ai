@@ -1,0 +1,20 @@
+{
+  "party_a": "Nile Property Holdings LLC",
+  "party_b": "Ahmed El-Masry (Tenant)",
+  "contract_type": "Lease",
+  "start_date": "2026-06-01",
+  "end_date": "2027-05-31",
+  "auto_renew": false,
+  "key_obligations": [
+    "Tenant pays monthly rent of EGP 18,000 by the 5th of each month",
+    "Landlord maintains structural integrity and shared utilities",
+    "Tenant covers electricity, water, and internet",
+    "Either party may terminate with 60 days written notice after month 6",
+    "No subletting without written consent"
+  ],
+  "payment_terms": "Monthly, due by the 5th",
+  "termination_clause_summary": "60 days written notice after month 6; immediate termination on material breach",
+  "governing_law": "Egypt",
+  "signed": true,
+  "confidence": 0.91
+}

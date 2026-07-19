@@ -1,0 +1,19 @@
+{
+  "vendor_name": "Acme Supplies Co.",
+  "vendor_tax_id": "EG123456789",
+  "invoice_number": "INV-2026-0042",
+  "invoice_date": "2026-04-15",
+  "due_date": "2026-05-15",
+  "currency": "EGP",
+  "subtotal": 12000,
+  "tax_amount": 1680,
+  "tax_rate": 14,
+  "total_amount": 13680,
+  "line_items": [
+    { "description": "Industrial cleaner 5L", "qty": 10, "unit_price": 800, "total": 8000 },
+    { "description": "Microfiber cloths box of 50", "qty": 4, "unit_price": 1000, "total": 4000 }
+  ],
+  "payment_terms": "Net 30",
+  "notes": null,
+  "confidence": 0.94
+}

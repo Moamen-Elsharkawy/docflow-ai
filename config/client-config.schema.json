@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DocFlow Client Config",
+  "type": "object",
+  "required": ["client_id", "intake", "doc_types_enabled", "destinations", "telegram", "thresholds"],
+  "properties": {
+    "client_id": { "type": "string" },
+    "display_name": { "type": "string" },
+    "default_currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "default_language": { "type": "string" },
+    "intake": {
+      "type": "object",
+      "properties": {
+        "gmail": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "watch_address": { "type": "string" },
+            "label_filter": { "type": "string" }
+          }
+        },
+        "drive": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "folder_id": { "type": "string" }
+          }
+        }
+      }
+    },
+    "doc_types_enabled": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["invoice", "contract", "form"] }
+    },
+    "destinations": {
+      "type": "object",
+      "properties": {
+        "invoices": {
+          "type": "object",
+          "required": ["kind", "spreadsheet_id"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["sheets"] },
+            "spreadsheet_id": { "type": "string" },
+            "tab": { "type": "string" },
+            "review_tab": { "type": "string" }
+          }
+        },
+        "contracts": {
+          "type": "object",
+          "required": ["kind", "database_id"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["notion"] },
+            "database_id": { "type": "string" }
+          }
+        }
+      }
+    },
+    "forms": {
+      "type": "object",
+      "properties": {
+        "destination": {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["sheets", "notion"] },
+            "spreadsheet_id": { "type": "string" },
+            "tab": { "type": "string" },
+            "database_id": { "type": "string" }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type", "required"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["string", "number", "boolean", "date"] },
+              "required": { "type": "boolean" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "telegram": {
+      "type": "object",
+      "required": ["chat_id"],
+      "properties": {
+        "chat_id": { "type": ["string", "integer"] },
+        "thread_id": { "type": ["string", "integer", "null"] }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "properties": {
+        "min_text_length": { "type": "integer", "minimum": 0 },
+        "classify_min_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "extract_min_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "field_min_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "audit_log": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "supabase_url": { "type": ["string", "null"] },
+        "supabase_table": { "type": "string" }
+      }
+    }
+  }
+}

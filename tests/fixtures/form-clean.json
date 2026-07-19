@@ -1,0 +1,8 @@
+{
+  "applicant_name": "Sara Ahmed",
+  "applicant_email": "sara@example.com",
+  "applicant_age": 32,
+  "submitted_date": "2026-04-30",
+  "consent_given": true,
+  "confidence": 0.93
+}
