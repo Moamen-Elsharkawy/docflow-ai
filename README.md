@@ -1,6 +1,15 @@
 # DocFlow AI
 
-Turn incoming business documents into clean, structured data automatically. DocFlow AI watches Gmail and Google Drive for invoices, contracts, and intake forms, classifies each one, extracts the fields with an LLM behind validation and confidence gates, and routes the result to Google Sheets or Notion, with a human-in-the-loop review queue so nothing is ever silently dropped.
+## Project status and evidence
+
+**Portfolio build.** Local checks do not establish live Gmail/Drive delivery or end-to-end acceptance of every document type.
+
+**My contribution:** Built a reference architecture with intake, classification, extraction, deterministic validation and review routing.
+
+**Verification:** 30/30 local validator/export checks passed on 20 October 2026.
+
+
+Turn incoming business documents into clean, structured data automatically. DocFlow AI watches Gmail and Google Drive for invoices, contracts, and intake forms, classifies each one, extracts the fields with an LLM behind validation and confidence gates, and routes the result to Google Sheets or Notion, with a human-in-the-loop review queue with an explicit review path for uncertain documents.
 
 ![DocFlow AI](https://raw.githubusercontent.com/Moamen-Elsharkawy/portfolio-assets/main/covers/docflow-ai.png)
 
